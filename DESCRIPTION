@@ -1,15 +1,14 @@
 Package: Rteta
-Title: What the Package Does (One Line, Title Case)
+Title: Open football analytics in R
 Version: 0.0.0.9000
 Authors@R: 
-    person(given = "First",
-           family = "Last",
+    person(given = "Robert",
+           family = "Hickman",
            role = c("aut", "cre"),
-           email = "first.last@example.com",
-           comment = c(ORCID = "YOUR-ORCID-ID"))
-Description: What the package does (one paragraph).
-License: `use_mit_license()`, `use_gpl3_license()` or friends to
-    pick a license
+           email = "robwhickman@gmail.com"
+           )
+Description: R package to do the equivalent work of Kloppy for python. General helpers and models for football analytics in R.
+License: `use_gpl3_license()`
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
