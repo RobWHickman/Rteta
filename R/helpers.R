@@ -12,8 +12,12 @@ sb_clean_locations <- function(match_events) {
   #takes start locations of actions and reduces to x and y columns
   start <- match_events$location
   start[sapply(start, is.null)] <- NA
-  start_locs <- as.data.frame(do.call(rbind, start))
-  names(start_locs) <- c("location.x", "location.y")
+  start_locs <- as.data.frame(t(sapply(start, "[", i = seq_len(max(lengths(start))))))
+  if(max(lengths(start)) == 2) {
+    names(start_locs) <- c("location.x", "location.y")
+  } else {
+    names(start_locs) <- c("location.x", "location.y", "location.z")
+  }
 
   # takes end locations for the 3 'progressive' actions and coalesces into 3
   # end location columns (x, y, z)
@@ -90,7 +94,7 @@ sb_getmins_played = function(match_events) {
   if(!"bad_behaviour.card.name" %in% names(match_events)) match_events$bad_behaviour.card.name <- NA
   if(!"foul_committed.card.name" %in% names(match_events)) match_events$foul_committed.card.name <- NA
   reds <- match_events %>%
-    dplyr::filter(bad_behaviour.card.name %in% c("Red Card", "Second Yellow Card") | foul_committed.card.name %in% c("Red Card", "Second Yellow Card")) %>%
+    dplyr::filter(bad_behaviour.card.name %in% c("Red Card", "Second Yellow") | foul_committed.card.name %in% c("Red Card", "Second Yellow")) %>%
     dplyr::mutate(position.id = NA, position.name = "Sent Off") %>%
     dplyr::select(names(lineups))
 
@@ -106,9 +110,20 @@ sb_getmins_played = function(match_events) {
     dplyr::mutate(state_seconds = case_when(
       is.na(state_seconds) ~ (`1` + `2`) - secondselapsed,
       TRUE ~ state_seconds
-    )) %>%
-    dplyr::filter(!position.name %in% c("Subbed Off", "Sent Off")) %>%
-    dplyr::select(-`1`, -`2`) %>%
+    ))
+  if(nrow(reds) > 0 ) {
+    player_changes <- player_changes %>%
+      dplyr::left_join(mutate(reds, red_flag = 1)) %>%
+      dplyr::group_by(player.id) %>%
+      dplyr::mutate(red_flag = zoo::na.locf(red_flag, na.rm = FALSE)) %>%
+      ungroup()
+  } else {
+    player_changes <- player_changes %>%
+      mutate(red_flag = NA)
+  }
+  player_changes <- player_changes %>%
+    dplyr::filter(!position.name %in% c("Subbed Off", "Sent Off") & is.na(red_flag)) %>%
+    dplyr::select(-`1`, -`2`, -red_flag) %>%
     dplyr::arrange(team.name, position.id, player.name, period)
 
   return(player_changes)
