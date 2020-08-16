@@ -10,17 +10,27 @@
 #' @export sb_convert_spadl
 
 sb_convert_spadl <- function(match_events) {
+  home_team <- match_events$team.id[1]
+
   match_locations <- Rteta::sb_clean_locations(match_events) %>%
     select_at(vars(starts_with("location."))) %>%
     rename_at(vars(starts_with("location.end")), .funs = funs(gsub("location\\.end\\.", "end_", .))) %>%
-    rename_at(vars(starts_with("location")), .funs = funs(gsub("location\\.", "start_", .)))
-  match_locations <- cbind(
-    match_locations[grep("z$", names(match_locations))],
-    apply(match_locations[grep("x$", names(match_locations))], 2, spadl_dict, type = "location_x", provider = "statsbomb"),
-    apply(match_locations[grep("y$", names(match_locations))], 2, spadl_dict, type = "location_y", provider = "statsbomb")
-  )
-  match_locations$end_location_x[which(match_events$type.name == "Clearance")] <- match_locations$start_location_x[which(match_events$type.name == "Clearance") + 1]
-  match_locations$end_location_y[which(match_events$type.name == "Clearance")] <- match_locations$start_location_y[which(match_events$type.name == "Clearance") + 1]
+    rename_at(vars(starts_with("location")), .funs = funs(gsub("location\\.", "start_", .))) %>%
+    dplyr::mutate_at(vars(ends_with("x")), .funs = funs(case_when(
+      match_events$team.id != home_team ~ 105 - spadl_dict(type = "location_x", provider = "statsbomb", data = .),
+      TRUE ~ spadl_dict(type = "location_x", provider = "statsbomb", data = .)
+    ))) %>%
+  dplyr::mutate_at(vars(ends_with("y")), .funs = funs(case_when(
+    match_events$team.id != home_team ~ 68 - spadl_dict(type = "location_y", provider = "statsbomb", data = .),
+    TRUE ~ spadl_dict(type = "location_y", provider = "statsbomb", data = .)
+  )))
+  match_locations$end_x[which(is.na(match_locations$end_x))] <- match_locations$start_x[which(is.na(match_locations$end_x))]
+  match_locations$end_y[which(is.na(match_locations$end_y))] <- match_locations$start_y[which(is.na(match_locations$end_y))]
+  match_locations$end_x[which(match_events$type.name == "Clearance")] <- match_locations$start_x[which(match_events$type.name == "Clearance") + 1]
+  match_locations$end_y[which(match_events$type.name == "Clearance")] <- match_locations$start_y[which(match_events$type.name == "Clearance") + 1]
+
+  #rotate away team locations
+
 
   actions <- match_events$type.name
   actions_extra <- match_events %>%
@@ -43,7 +53,7 @@ sb_convert_spadl <- function(match_events) {
   actions[actions == "goal keeper" & actions_extra == "Shot Saved"] <- "keeper_save"
   actions[actions == "goal keeper" & actions_extra %in% c("Collected", "Keeper Sweeper")] <- "keeper_claim"
   actions[actions == "goal keeper" & actions_extra == "Punch"] <- "keeper_punch"
-  actions[actions == "goal keeper"] <- "non_actions"
+  actions[actions == "goal keeper"] <- "non_action"
 
 
   #get the player minutes per match
@@ -73,7 +83,14 @@ sb_convert_spadl <- function(match_events) {
     mutate(action = actions,
            bodypart_name = spadl_dict("body", "statsbomb", bodyparts),
            result_name = spadl_dict("results", "statsbomb", results)) %>%
-    cbind(match_locations)
+    cbind(match_locations) %>%
+    dplyr::filter(!is.na(player_id) & action != "non_action")
+
+  extra_dribbles <- Rteta::split_dribbles(actions)
+  spadl <- rbind(actions, extra_dribbles) %>%
+    dplyr::arrange(period_id, time_seconds)
+
+  return(spadl)
 }
 
 #' Convert data from provider specs into a common spadl format
@@ -106,16 +123,17 @@ spadl_dict <- function(type, provider, data) {
       data[grepl("Drop Kick", data)] <- "Foot"
       data[grepl("Head", data)] <- "Head"
       data[!data %in% c("Foot", "Head") & !is.na(data)] <- "Other"
+      data[is.na(data)] <- "Foot"
 
       return(data)
     }
     if(type == "location_x") {
-      data <- (data / 120) * 105
+      data <- ((data - 1) / 119) * 105
 
       return(data)
     }
     if(type == "location_y") {
-      data <- (data / 80) * 68
+      data <- 68 - ((data - 1) / 79) * 68
 
       return(data)
     }
@@ -134,3 +152,43 @@ spadl_dict <- function(type, provider, data) {
     }
   }
 }
+
+#' Add missing dribbles back into spadl data frame
+#' @param spadl A data frame of the prospective spadl format
+#'
+#' @examples
+#'
+#' @author Robert Hickman
+#' @export split_dribbles
+
+split_dribbles <- function(spadl) {
+  leading_actions <- lead(spadl)
+  same_team <- spadl$team_id == leading_actions$team_id
+  dx <- spadl$end_x - leading_actions$start_x
+  dy <- spadl$end_y - leading_actions$start_y
+
+  min_dribble_length = 3.0
+  max_dribble_length = 60.0
+  max_dribble_duration = 10.0
+
+  dhyp <- sqrt(dx^2 + dy^2)
+  notclose_leads <- dhyp >= min_dribble_length
+  notfar_leads <- dhyp <= max_dribble_length
+  same_phase <- leading_actions$time_seconds - spadl$time_seconds < max_dribble_duration
+
+  dribble_idx <- which(same_team & same_phase & notfar_leads & notclose_leads)
+
+  dribble_actions <- spadl[dribble_idx,]
+  dribble_actions$player_id <- spadl$player_id[dribble_idx+1]
+  dribble_actions$player_name <- spadl$player_name[dribble_idx+1]
+  dribble_actions$end_x <- spadl$start_x[dribble_idx + 1]
+  dribble_actions$end_y <- spadl$start_y[dribble_idx + 1]
+  dribble_actions$action <- "dribble"
+  dribble_actions$bodypart_name <- "Foot"
+  dribble_actions$result_name <- "success"
+  dribble_actions$time_seconds <- dribble_actions$time_seconds + 0.1
+
+  return(dribble_actions)
+}
+
+
