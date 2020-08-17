@@ -81,7 +81,7 @@ sb_convert_spadl <- function(match_events) {
   #bind everything together
   spadl_df$action_id <- 1:nrow(spadl_df)
   spadl_df$type_name = actions
-  spadl_df <- merge(spadl_df, spadl_type_ids, by = "type_name")
+  spadl_df <- merge(spadl_df, Rteta::spadl_type_ids, by = "type_name")
   spadl_df <- spadl_df[order(spadl_df$action_id),]
   spadl_df$bodypart_name = bodyparts
   spadl_df$result_name = results
@@ -89,6 +89,9 @@ sb_convert_spadl <- function(match_events) {
 
   #filter non actions
   spadl_df <- spadl_df[-which(spadl_df$type_name == "non_action"),]
+  #add end positions for stationary events
+  spadl_df$end_x[is.na(spadl_df$end_x)] <- spadl_df$start_x[is.na(spadl_df$end_x)]
+  spadl_df$end_y[is.na(spadl_df$end_y)] <- spadl_df$start_y[is.na(spadl_df$end_y)]
   #fix direction of play
   spadl_df$start_x[spadl_df$team_id != home_team] <- 105 - spadl_df$start_x[spadl_df$team_id != home_team]
   spadl_df$end_x[spadl_df$team_id != home_team] <- 105 - spadl_df$end_x[spadl_df$team_id != home_team]
@@ -103,81 +106,9 @@ sb_convert_spadl <- function(match_events) {
   extra_dribbles <- Rteta::split_dribbles(spadl_df)
   spadl_df <- rbind(spadl_df, extra_dribbles)
   spadl_df <- arrange(spadl_df, period_id, time_seconds)
+  spadl_df$action_id <- seq(nrow(spadl_df))
 
   return(spadl_df)
-}
-
-
-sb_convert_spadl <- function(match_events, save_dir = ".") {
-  home_team <- match_events$team.id[1]
-
-  match_locations <- Rteta::sb_clean_locations(match_events) %>%
-    select_at(vars(starts_with("location."))) %>%
-    rename_at(vars(starts_with("location.end")), .funs = funs(gsub("location\\.end\\.", "end_", .))) %>%
-    rename_at(vars(starts_with("location")), .funs = funs(gsub("location\\.", "start_", .))) %>%
-    dplyr::mutate_at(vars(ends_with("x")), .funs = funs(case_when(
-      match_events$team.id != home_team ~ 105 - spadl_dict(type = "location_x", provider = "statsbomb", data = .),
-      TRUE ~ spadl_dict(type = "location_x", provider = "statsbomb", data = .)
-    ))) %>%
-  dplyr::mutate_at(vars(ends_with("y")), .funs = funs(case_when(
-    match_events$team.id != home_team ~ 68 - spadl_dict(type = "location_y", provider = "statsbomb", data = .),
-    TRUE ~ spadl_dict(type = "location_y", provider = "statsbomb", data = .)
-  )))
-  match_locations$end_x[which(is.na(match_locations$end_x))] <- match_locations$start_x[which(is.na(match_locations$end_x))]
-  match_locations$end_y[which(is.na(match_locations$end_y))] <- match_locations$start_y[which(is.na(match_locations$end_y))]
-  match_locations$end_x[which(match_events$type.name == "Clearance")] <- match_locations$start_x[which(match_events$type.name == "Clearance") + 1]
-  match_locations$end_y[which(match_events$type.name == "Clearance")] <- match_locations$start_y[which(match_events$type.name == "Clearance") + 1]
-
-  #rotate away team locations
-
-
-
-
-  #get the player minutes per match
-  player_mins <- Rteta::sb_getmins_played(match_events) %>%
-    dplyr::select(match_id, team_name = team.name, player_id = player.id, player_name = player.name, seconds = state_seconds) %>%
-    dplyr::group_by(match_id, team_name, player_id, player_name) %>%
-    dplyr::summarise(minutes = sum(seconds) / 60)
-
-  bodyparts <- match_events[names(match_events)[grepl("body_part\\.name", names(match_events))]]
-  bodyparts <- dplyr::coalesce(!!!bodyparts)
-
-  results <- match_events %>%
-    select(names(match_events)[
-      c(
-        grep("(?<!substitution)outcome.name", names(match_events), perl = TRUE),
-        grep("card.name", names(match_events)),
-        grep("clearance.body_part.name", names(match_events))
-      )])
-  results <- dplyr::coalesce(!!!results)
-  results[which(match_events$type.name == "Own Goal Against")] <- "Own Goal Against"
-  results[which(match_events$type.name == "Miscontrol")] <- "Miscontrol"
-  results <- Rteta::spadl_dict("results", "statsbomb", results)
-
-  actions <- match_events %>%
-    mutate(seconds = as.numeric(lubridate::hms(match_events$timestamp))) %>%
-    select(game_id = match_id, period_id = period, time_seconds = seconds, timestamp,
-           team_id = team.id, team_name = team.name, player_id = player.id, player_name = player.name) %>%
-    mutate(action = actions,
-           bodypart_name = spadl_dict("body", "statsbomb", bodyparts),
-           result_name = spadl_dict("results", "statsbomb", results)) %>%
-    cbind(match_locations) %>%
-    dplyr::filter(!is.na(player_id) & action != "non_action")
-
-  extra_dribbles <- Rteta::split_dribbles(actions)
-  spadl_df <- rbind(spadl_df, extra_dribbles)
-  spadl_df <- dplyr::arrange(spadl_df, period_id, time_seconds)
-
-  # if(!dir.exists(save_dir)) dir.create(save_dir)
-  # if(!dir.exists(file.path(save_dir, "minutes"))) dir.create(file.path(save_dir, "minutes"))
-  # if(!dir.exists(file.path(save_dir, "spadl"))) dir.create(file.path(save_dir, "spadl"))
-  #
-  # game_id <- unique(match_events$match_id)
-  # arrow::write_parquet(spadl, paste0(file.path(save_dir, "minutes", game_id), ".parquet"))
-  # arrow::write_parquet(spadl, paste0(file.path(save_dir, "spadl", game_id), ".parquet"))
-  #
-  # message <- paste("written game", game_id)
-  return(spadl)
 }
 
 #' Convert data from provider specs into a common spadl format
@@ -268,9 +199,9 @@ split_dribbles <- function(spadl) {
   dribble_actions <- spadl[dribble_idx,]
   dribble_actions$player_id <- spadl$player_id[dribble_idx+1]
   dribble_actions$player_name <- spadl$player_name[dribble_idx+1]
-  dribble_actions$start_x <- spadl$start_x[dribble_idx - 1]
-  dribble_actions$end_x <- spadl$start_y[dribble_idx - 1]
+  dribble_actions$start_x <- spadl$end_x[dribble_idx]
   dribble_actions$end_x <- spadl$start_x[dribble_idx + 1]
+  dribble_actions$start_y <- spadl$end_y[dribble_idx]
   dribble_actions$end_y <- spadl$start_y[dribble_idx + 1]
   dribble_actions$type_name <- "dribble"
   dribble_actions$type_id <- 21
