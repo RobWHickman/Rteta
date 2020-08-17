@@ -9,7 +9,7 @@
 #' @author Robert Hickman
 #' @export sb_convert_spadl
 
-sb_convert_spadl <- function(match_events) {
+sb_convert_spadl <- function(match_events, save_dir = ".") {
   home_team <- match_events$team.id[1]
 
   match_locations <- Rteta::sb_clean_locations(match_events) %>%
@@ -58,9 +58,9 @@ sb_convert_spadl <- function(match_events) {
 
   #get the player minutes per match
   player_mins <- Rteta::sb_getmins_played(match_events) %>%
-    select(match_id, team_name = team.name, player_id = player.id, player_name = player.name, seconds = state_seconds) %>%
-    group_by(match_id, team_name, player_id, player_name) %>%
-    summarise(minutes = sum(seconds) / 60)
+    dplyr::select(match_id, team_name = team.name, player_id = player.id, player_name = player.name, seconds = state_seconds) %>%
+    dplyr::group_by(match_id, team_name, player_id, player_name) %>%
+    dplyr::summarise(minutes = sum(seconds) / 60)
 
   bodyparts <- match_events[names(match_events)[grepl("body_part\\.name", names(match_events))]]
   bodyparts <- dplyr::coalesce(!!!bodyparts)
@@ -90,6 +90,15 @@ sb_convert_spadl <- function(match_events) {
   spadl <- rbind(actions, extra_dribbles) %>%
     dplyr::arrange(period_id, time_seconds)
 
+  # if(!dir.exists(save_dir)) dir.create(save_dir)
+  # if(!dir.exists(file.path(save_dir, "minutes"))) dir.create(file.path(save_dir, "minutes"))
+  # if(!dir.exists(file.path(save_dir, "spadl"))) dir.create(file.path(save_dir, "spadl"))
+  #
+  # game_id <- unique(match_events$match_id)
+  # arrow::write_parquet(spadl, paste0(file.path(save_dir, "minutes", game_id), ".parquet"))
+  # arrow::write_parquet(spadl, paste0(file.path(save_dir, "spadl", game_id), ".parquet"))
+  #
+  # message <- paste("written game", game_id)
   return(spadl)
 }
 
@@ -181,6 +190,8 @@ split_dribbles <- function(spadl) {
   dribble_actions <- spadl[dribble_idx,]
   dribble_actions$player_id <- spadl$player_id[dribble_idx+1]
   dribble_actions$player_name <- spadl$player_name[dribble_idx+1]
+  dribble_actions$start_x <- spadl$start_x[dribble_idx - 1]
+  dribble_actions$end_x <- spadl$start_y[dribble_idx - 1]
   dribble_actions$end_x <- spadl$start_x[dribble_idx + 1]
   dribble_actions$end_y <- spadl$start_y[dribble_idx + 1]
   dribble_actions$action <- "dribble"
