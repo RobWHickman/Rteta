@@ -182,19 +182,21 @@ spadl_dict <- function(type, provider, data) {
 split_dribbles <- function(spadl) {
   leading_actions <- lead(spadl)
   same_team <- spadl$team_id == leading_actions$team_id
+  same_period <- spadl$period_id == leading_actions$period_id
   dx <- spadl$end_x - leading_actions$start_x
   dy <- spadl$end_y - leading_actions$start_y
 
   min_dribble_length = 3.0
   max_dribble_length = 60.0
-  max_dribble_duration = 10.0
+  #bleh I don't like how this works
+  max_dribble_duration = 10
 
   dhyp <- sqrt(dx^2 + dy^2)
   notclose_leads <- dhyp >= min_dribble_length
   notfar_leads <- dhyp <= max_dribble_length
-  same_phase <- leading_actions$time_seconds - spadl$time_seconds < max_dribble_duration
+  same_phase <- floor(leading_actions$time_seconds) - floor(spadl$time_seconds) < max_dribble_duration
 
-  dribble_idx <- which(same_team & same_phase & notfar_leads & notclose_leads)
+  dribble_idx <- which(same_team& same_period & same_phase & notfar_leads & notclose_leads)
 
   dribble_actions <- spadl[dribble_idx,]
   dribble_actions$player_id <- spadl$player_id[dribble_idx+1]
