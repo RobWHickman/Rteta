@@ -4,7 +4,7 @@
 \alias{sb_convert_spadl}
 \title{Convert a dataframe of StatsBomb data into the spadl format}
 \usage{
-sb_convert_spadl(match_events, save_dir = ".")
+sb_convert_spadl(match_events)
 }
 \arguments{
 \item{match_events}{A dataframe of imported StatsBomb event data}
