@@ -81,12 +81,8 @@ sb_convert_spadl <- function(match_events) {
   #bind everything together
   spadl_df$action_id <- 1:nrow(spadl_df)
   spadl_df$type_name = actions
-  spadl_df <- merge(spadl_df, Rteta::spadl_type_ids, by = "type_name")
   spadl_df$bodypart_name = bodyparts
-  spadl_df <- merge(spadl_df, Rteta::spadl_bodypart_ids, by = "bodypart_name")
   spadl_df$result_name = results
-  spadl_df <- merge(spadl_df, Rteta::spadl_result_ids, by = "result_name")
-  spadl_df <- spadl_df[order(spadl_df$action_id),]
   spadl_df <- cbind(spadl_df, match_locations)
 
   #filter non actions
@@ -109,6 +105,11 @@ sb_convert_spadl <- function(match_events) {
   spadl_df <- rbind(spadl_df, extra_dribbles)
   spadl_df <- arrange(spadl_df, period_id, time_seconds)
   spadl_df$action_id <- seq(nrow(spadl_df))
+  #add ids
+  spadl_df <- dplyr::left_join(spadl_df, Rteta::spadl_type_ids, by = "type_name")
+  spadl_df <- dplyr::left_join(spadl_df, Rteta::spadl_result_ids, by = "result_name")
+  spadl_df <- dplyr::left_join(spadl_df, Rteta::spadl_bodypart_ids, by = "bodypart_name")
+
 
   return(spadl_df)
 }
@@ -139,11 +140,11 @@ spadl_dict <- function(type, provider, data) {
       return(data)
     }
     if(type == "body") {
-      data[grepl("Foot", data)] <- "Foot"
-      data[grepl("Drop Kick", data)] <- "Foot"
-      data[grepl("Head", data)] <- "Head"
-      data[!data %in% c("Foot", "Head") & !is.na(data)] <- "Other"
-      data[is.na(data)] <- "Foot"
+      data[grepl("Foot", data)] <- "foot"
+      data[grepl("Drop Kick", data)] <- "foot"
+      data[grepl("Head", data)] <- "head"
+      data[!data %in% c("foot", "head") & !is.na(data)] <- "other"
+      data[is.na(data)] <- "foot"
 
       return(data)
     }
@@ -208,8 +209,7 @@ split_dribbles <- function(spadl) {
   dribble_actions$start_y <- spadl$end_y[dribble_idx]
   dribble_actions$end_y <- spadl$start_y[dribble_idx + 1]
   dribble_actions$type_name <- "dribble"
-  dribble_actions$type_id <- 21
-  dribble_actions$bodypart_name <- "Foot"
+  dribble_actions$bodypart_name <- "foot"
   dribble_actions$result_name <- "success"
   dribble_actions$time_seconds <- dribble_actions$time_seconds + 0.1
 
