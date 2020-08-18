@@ -82,9 +82,11 @@ sb_convert_spadl <- function(match_events) {
   spadl_df$action_id <- 1:nrow(spadl_df)
   spadl_df$type_name = actions
   spadl_df <- merge(spadl_df, Rteta::spadl_type_ids, by = "type_name")
-  spadl_df <- spadl_df[order(spadl_df$action_id),]
   spadl_df$bodypart_name = bodyparts
+  spadl_df <- merge(spadl_df, Rteta::spadl_bodypart_ids, by = "bodypart_name")
   spadl_df$result_name = results
+  spadl_df <- merge(spadl_df, Rteta::spadl_result_ids, by = "result_name")
+  spadl_df <- spadl_df[order(spadl_df$action_id),]
   spadl_df <- cbind(spadl_df, match_locations)
 
   #filter non actions
