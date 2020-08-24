@@ -60,7 +60,17 @@ vaep_get_features <- function(spadl) {
   total_time_seconds <- total_time_seconds[grep("a[0-9]$", names(total_time_seconds))]
 
   start_xs <- vaep_features_lag(spadl$start_x, 2, "start_x_a")
-  start_ys <- vaep_features_lag(spadl$start_x, 2, "start_y_a")
+  start_ys <- vaep_features_lag(spadl$start_y, 2, "start_y_a")
+  end_xs <- vaep_features_lag(spadl$end_x, 2, "end_x_a")
+  end_ys <- vaep_features_lag(spadl$end_y, 2, "end_y_a")
+
+  delta_x <- end_xs - start_xs
+  names(delta_x) <- gsub("^end_", "delta_", names(delta_x))
+  delta_y <- end_ys - start_ys
+  names(delta_y) <- gsub("^end_", "delta_", names(delta_y))
+
+  movement <- sqrt(delta_x^2 + delta_y ^ 2)
+  names(movement) <- gsub("^delta_x_", "movement_", names(movement))
 
   goal_context <- get_context_goals(spadl)
 }
