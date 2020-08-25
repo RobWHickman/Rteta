@@ -1,11 +1,32 @@
+#' Get a dataframe of n lagged columns of a feature (to be deprecated)
+#' @param vec A vector of data
+#' @param lags An integer >= 0
+#' @param name A character string
+#'
+#' @examples
+#' feature <- runif(10)
+#' lagged_cols <- vaep_features_lag(feature, 3, "lagged_feature_")
+#' head(lagged_cols)
+#'
+#' @author Robert Hickman
+#' @export vaep_features_lag
+
 vaep_features_lag <- function(vec, lags, name) {
   x <- lapply(0:lags, lag, x = vec) %>% do.call(cbind, .) %>% as.data.frame()
+  #replace names
   names(x) <- paste0(name, 0:lags)
   return(x)
 }
 
+#' Get the features of each match event (and preceeding events) from a spadl format
+#' @param spadl A dataframe of event data in spadl format
+#'
+#'
+#' @author Robert Hickman
+#' @export vaep_get_features
+
 vaep_get_features <- function(spadl) {
-  type_ids <- vaep_features_lag(spadl$type_id, 2, "type_id_a")
+  type_ids <- Rteta::vaep_features_lag(spadl$type_id, 2, "type_id_a")
 
   types_onehot <- do.call(
     cbind,
@@ -16,7 +37,7 @@ vaep_get_features <- function(spadl) {
     }, cols = type_ids)
   )
 
-  bodypart_ids <- vaep_features_lag(spadl$bodypart_id, 2, "bodypart_id_a")
+  bodypart_ids <- Rteta::vaep_features_lag(spadl$bodypart_id, 2, "bodypart_id_a")
 
   bodypart_onehot <- do.call(
     cbind,
@@ -27,7 +48,7 @@ vaep_get_features <- function(spadl) {
     }, cols = type_ids)
   )
 
-  result_ids <- vaep_features_lag(spadl$result_id, 2, "result_id_a")
+  result_ids <- Rteta::vaep_features_lag(spadl$result_id, 2, "result_id_a")
 
   result_onehot <- do.call(
     cbind,
@@ -38,7 +59,7 @@ vaep_get_features <- function(spadl) {
     }, cols = type_ids)
   )
 
-  period_ids <- vaep_features_lag(spadl$period_id, 2, "period_id_a")
+  period_ids <- Rteta::vaep_features_lag(spadl$period_id, 2, "period_id_a")
 
   halves <- split(spadl,spadl$period_id)
   period_time_seconds <- lapply(halves, function(h) vaep_features_lag(h$time_seconds, 2, "time_seconds_a"))
@@ -59,10 +80,10 @@ vaep_get_features <- function(spadl) {
 
   total_time_seconds <- total_time_seconds[grep("a[0-9]$", names(total_time_seconds))]
 
-  start_xs <- vaep_features_lag(spadl$start_x, 2, "start_x_a")
-  start_ys <- vaep_features_lag(spadl$start_y, 2, "start_y_a")
-  end_xs <- vaep_features_lag(spadl$end_x, 2, "end_x_a")
-  end_ys <- vaep_features_lag(spadl$end_y, 2, "end_y_a")
+  start_xs <- Rteta::vaep_features_lag(spadl$start_x, 2, "start_x_a")
+  start_ys <- Rteta::vaep_features_lag(spadl$start_y, 2, "start_y_a")
+  end_xs <- Rteta::vaep_features_lag(spadl$end_x, 2, "end_x_a")
+  end_ys <- Rteta::vaep_features_lag(spadl$end_y, 2, "end_y_a")
 
   delta_x <- end_xs - start_xs
   names(delta_x) <- gsub("^end_", "delta_", names(delta_x))
@@ -72,8 +93,15 @@ vaep_get_features <- function(spadl) {
   movement <- sqrt(delta_x^2 + delta_y ^ 2)
   names(movement) <- gsub("^delta_x_", "movement_", names(movement))
 
-  goal_context <- get_context_goals(spadl)
+  goal_context <- Rteta::get_context_goals(spadl)
 }
+
+#' Get the goal context of a spadl data frame
+#' @param spadl A dataframe of event data in spadl format
+#'
+#'
+#' @author Robert Hickman
+#' @export get_context_goals
 
 get_context_goals <- function(spadl) {
   teama <- spadl$team_id == unique(spadl$team_id)[1]
