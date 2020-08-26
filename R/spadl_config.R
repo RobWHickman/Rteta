@@ -39,3 +39,31 @@
 #' @examples
 #' results <- data(spadl_result_ids)
 "spadl_result_ids"
+
+#' The field length for spadl actions
+#'
+#' @docType data
+#'
+#' @usage data(spadl_field_length)
+#'
+#' @keywords datasets
+#'
+#' @source \href{https://github.com/ML-KULeuven/socceraction/blob/master/socceraction/spadl/config.py}{socceraction repo}
+#'
+#' @examples
+#' results <- data(spadl_field_length)s
+"spadl_field_length"
+
+#' The field width for spadl actions
+#'
+#' @docType data
+#'
+#' @usage data(spadl_field_width)
+#'
+#' @keywords datasets
+#'
+#' @source \href{https://github.com/ML-KULeuven/socceraction/blob/master/socceraction/spadl/config.py}{socceraction repo}
+#'
+#' @examples
+#' results <- data(spadl_field_width)s
+"spadl_field_width"

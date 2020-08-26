@@ -74,11 +74,13 @@ vaep_get_features <- function(spadl) {
   total_time_seconds$period_id <- spadl$period_id
   total_time_seconds <- merge(total_time_seconds, half_ends, by = "period_id")
 
-  total_time_seconds$overall_time_secondsa0 = total_time_seconds$time_seconds_a0 + total_time_seconds$time_seconds
-  total_time_seconds$overall_time_secondsa1 = total_time_seconds$time_seconds_a1 + total_time_seconds$time_seconds
-  total_time_seconds$overall_time_secondsa2 = total_time_seconds$time_seconds_a2 + total_time_seconds$time_seconds
+  total_time_seconds$time_seconds_overall_a0 = total_time_seconds$time_seconds_a0 + total_time_seconds$time_seconds
+  total_time_seconds$time_seconds_overall_a1 = total_time_seconds$time_seconds_a1 + total_time_seconds$time_seconds
+  total_time_seconds$time_seconds_overall_a2 = total_time_seconds$time_seconds_a2 + total_time_seconds$time_seconds
 
   total_time_seconds <- total_time_seconds[grep("a[0-9]$", names(total_time_seconds))]
+  total_time_seconds$time_delta_1 <- total_time_seconds$time_seconds_overall_a0 - lag(total_time_seconds$time_seconds_overall_a0)
+  total_time_seconds$time_delta_2 <- total_time_seconds$time_seconds_overall_a0 - lag(total_time_seconds$time_seconds_overall_a0, n = 2)
 
   start_xs <- Rteta::vaep_features_lag(spadl$start_x, 2, "start_x_a")
   start_ys <- Rteta::vaep_features_lag(spadl$start_y, 2, "start_y_a")
@@ -86,14 +88,54 @@ vaep_get_features <- function(spadl) {
   end_ys <- Rteta::vaep_features_lag(spadl$end_y, 2, "end_y_a")
 
   delta_x <- end_xs - start_xs
-  names(delta_x) <- gsub("^end_", "delta_", names(delta_x))
+  names(delta_x) <- gsub("^end_", "d", names(delta_x))
   delta_y <- end_ys - start_ys
-  names(delta_y) <- gsub("^end_", "delta_", names(delta_y))
+  names(delta_y) <- gsub("^end_", "d", names(delta_y))
 
   movement <- sqrt(delta_x^2 + delta_y ^ 2)
-  names(movement) <- gsub("^delta_x_", "movement_", names(movement))
+  names(movement) <- gsub("^dx_", "movement_", names(movement))
+
+  lr <- spadl[c("start_x", "end_x", "start_y", "end_y")]
+  lr[!spadl$home_team, grep("_x$", names(lr))] <- Rteta::spadl_field_length - lr[!spadl$home_team, grep("_x$", names(lr))]
+  lr[!spadl$home_team, grep("_y$", names(lr))] <- Rteta::spadl_field_width - lr[!spadl$home_team, grep("_y$", names(lr))]
+
+  start_goal_distance <- sqrt(
+    (Rteta::spadl_field_length - lr$start_x)^2 +
+      ((Rteta::spadl_field_width / 2) - lr$start_y)^2
+  )
+  end_goal_distance <- sqrt(
+    (Rteta::spadl_field_length - lr$end_x)^2 +
+      ((Rteta::spadl_field_width / 2) - lr$end_y)^2
+  )
+  start_goal_dist <- Rteta::vaep_features_lag(start_goal_distance, 2, "start_dist_to_goal_a")
+  end_goal_dist <- Rteta::vaep_features_lag(start_goal_distance, 2, "end_dist_to_goal_a")
+
+  start_goal_angles <- abs(atan(((Rteta::spadl_field_width / 2) - lr$start_y) / (Rteta::spadl_field_length - lr$start_x)))
+  end_goal_angles <- abs(atan(((Rteta::spadl_field_width / 2) - lr$end_y) / (Rteta::spadl_field_length - lr$end_x)))
+  start_goal_angles <- Rteta::vaep_features_lag(start_goal_angles, 2, "start_angle_to_goal_a")
+  end_goal_angles <- Rteta::vaep_features_lag(start_goal_distance, 2, "end_angle_to_goal_a")
+
+  dx <- (Rteta::vaep_features_lag(spadl$end_x, 2, "dx_a0") - spadl$start_x)[2:3]
+  dy <- (Rteta::vaep_features_lag(spadl$end_y, 2, "dy_a0") - spadl$start_y)[2:3]
+  move <- sqrt(dx^2 + dy^2)
+  names(move) <- c("mov_a01", "mov_a02")
 
   goal_context <- Rteta::get_context_goals(spadl)
+
+
+  features0 <- cbind(
+    start_xs, start_ys, end_xs, end_ys,
+    start_goal_dist, end_goal_dist,
+    start_goal_angles, end_goal_angles,
+    delta_x, delta_y, movement,
+    dx, dy, move,
+    total_time_seconds
+  )
+  features2 <- cbind(
+    type_ids, types_onehot, bodypart_ids, bodypart_onehot, result_ids, result_onehot, goal_context
+  )
+
+  all_features <- cbind(features0, features2)
 }
 
 #' Get the goal context of a spadl data frame
@@ -104,15 +146,19 @@ vaep_get_features <- function(spadl) {
 #' @export get_context_goals
 
 get_context_goals <- function(spadl) {
-  teama <- spadl$team_id == unique(spadl$team_id)[1]
+  teama <- spadl$home_team
+  teamb <- !teama
+
   teama_goals <- (teama & grepl("^shot", spadl$type_name) & spadl$result_name == "success") | (teamb & grepl("^shot", spadl$type_name) & spadl$result_name == "owngoal")
-  teamb <- spadl$team_id == unique(spadl$team_id)[2]
   teamb_goals <- (teamb & grepl("^shot", spadl$type_name) & spadl$result_name == "success") | (teama & grepl("^shot", spadl$type_name) & spadl$result_name == "owngoal")
 
   goalsfor <- lag(cumsum(teama_goals) * teama + cumsum(teamb_goals) * teamb, default = 0)
   goalsagainst <- lag(cumsum(teama_goals) * teamb + cumsum(teamb_goals) * teama, default = 0)
 
-  df <- data.frame(goalsfor, goalsagainst, goalsdiff = goalsfor - goalsagainst)
+  df <- data.frame(
+    goalscore_team = goalsfor,
+    goalscore_opponent = goalsagainst,
+    goalscore_diff = goalsfor - goalsagainst)
 
   return(df)
 }
