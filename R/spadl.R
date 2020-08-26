@@ -20,6 +20,7 @@ sb_convert_spadl <- function(match_events) {
     time_seconds = as.numeric(lubridate::hms(match_events$timestamp)),
     timestamp = match_events$timestamp,
     team_id = match_events$team.id,
+    home_team = match_events$team.id == home_team,
     team_name = match_events$team.name,
     player_id = match_events$player.id,
     player_name = match_events$player.name
