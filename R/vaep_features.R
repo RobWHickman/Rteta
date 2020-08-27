@@ -32,7 +32,7 @@ vaep_get_features <- function(spadl) {
     cbind,
     lapply(Rteta::spadl_type_ids$type_id, function(i, cols) {
       df <- as.data.frame(cols == i)
-      names(df) <- gsub("_id_", paste0("_", i, "_"), names(df))
+      names(df) <- paste("action", gsub("_id_", paste0("_", i, "_"), names(df)), sep = "_")
       return(df)
     }, cols = type_ids)
   )
@@ -43,7 +43,7 @@ vaep_get_features <- function(spadl) {
     cbind,
     lapply(Rteta::spadl_bodypart_ids$bodypart_id, function(i, cols) {
       df <- as.data.frame(cols == i)
-      names(df) <- gsub("_id_", paste0("_", i, "_"), names(df))
+      names(df) <- paste("bodypart", gsub("_id_", paste0("_", i, "_"), names(df)), sep = "_")
       return(df)
     }, cols = type_ids)
   )
@@ -54,7 +54,7 @@ vaep_get_features <- function(spadl) {
     cbind,
     lapply(Rteta::spadl_result_ids$result_id, function(i, cols) {
       df <- as.data.frame(cols == i)
-      names(df) <- gsub("_id_", paste0("_", i, "_"), names(df))
+      names(df) <- paste("result", gsub("_id_", paste0("_", i, "_"), names(df)), sep = "_")
       return(df)
     }, cols = type_ids)
   )

@@ -17,6 +17,6 @@ data(spadl_field_length)
 The field length for spadl actions
 }
 \examples{
-results <- data(spadl_field_length)s
+field_length <- data(spadl_field_length)
 }
 \keyword{datasets}

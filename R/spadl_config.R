@@ -51,7 +51,7 @@
 #' @source \href{https://github.com/ML-KULeuven/socceraction/blob/master/socceraction/spadl/config.py}{socceraction repo}
 #'
 #' @examples
-#' results <- data(spadl_field_length)s
+#' field_length <- data(spadl_field_length)
 "spadl_field_length"
 
 #' The field width for spadl actions
@@ -65,5 +65,33 @@
 #' @source \href{https://github.com/ML-KULeuven/socceraction/blob/master/socceraction/spadl/config.py}{socceraction repo}
 #'
 #' @examples
-#' results <- data(spadl_field_width)s
+#' field_width <- data(spadl_field_width)
 "spadl_field_width"
+
+#' The fixed probability of scoring a penalty
+#'
+#' @docType data
+#'
+#' @usage data(pen_score_frac)
+#'
+#' @keywords datasets
+#'
+#' @source \href{https://github.com/ML-KULeuven/socceraction/blob/master/socceraction/spadl/config.py}{socceraction repo}
+#'
+#' @examples
+#' score_chance <- pen_score_frac
+"pen_score_frac"
+
+#' The fixed probability of scoring from a corner
+#'
+#' @docType data
+#'
+#' @usage data(corner_score_frac)
+#'
+#' @keywords datasets
+#'
+#' @source \href{https://github.com/ML-KULeuven/socceraction/blob/master/socceraction/spadl/config.py}{socceraction repo}
+#'
+#' @examples
+#' score_chance <- corner_score_frac
+"corner_score_frac"
