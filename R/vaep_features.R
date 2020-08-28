@@ -34,9 +34,9 @@ vaep_get_features <- function(spadl) {
 
   types_onehot <- do.call(
     cbind,
-    lapply(Rteta::spadl_type_ids$type_id, function(i, cols) {
+    purrr::map2(Rteta::spadl_type_ids$type_id, Rteta::spadl_type_ids$type_name, function(i, a, cols) {
       df <- as.data.frame(cols == i)
-      names(df) <- paste("action", gsub("_id_", paste0("_", i, "_"), names(df)), sep = "_")
+      names(df) <- gsub("_id_", paste0("_", a, "_"), names(df))
       return(df)
     }, cols = type_ids)
   )
@@ -45,22 +45,22 @@ vaep_get_features <- function(spadl) {
 
   bodypart_onehot <- do.call(
     cbind,
-    lapply(Rteta::spadl_bodypart_ids$bodypart_id, function(i, cols) {
+    purrr::map2(Rteta::spadl_bodypart_ids$bodypart_id, Rteta::spadl_bodypart_ids$bodypart_name, function(i, a, cols) {
       df <- as.data.frame(cols == i)
-      names(df) <- paste("bodypart", gsub("_id_", paste0("_", i, "_"), names(df)), sep = "_")
+      names(df) <- gsub("_id_", paste0("_", a, "_"), names(df))
       return(df)
-    }, cols = type_ids)
+    }, cols = bodypart_ids)
   )
 
   result_ids <- Rteta::vaep_features_lag(spadl$result_id, 2, "result_id_a")
 
   result_onehot <- do.call(
     cbind,
-    lapply(Rteta::spadl_result_ids$result_id, function(i, cols) {
+    purrr::map2(Rteta::spadl_result_ids$result_id, Rteta::spadl_result_ids$result_name, function(i, a, cols) {
       df <- as.data.frame(cols == i)
-      names(df) <- paste("result", gsub("_id_", paste0("_", i, "_"), names(df)), sep = "_")
+      names(df) <- gsub("_id_", paste0("_", a, "_"), names(df))
       return(df)
-    }, cols = type_ids)
+    }, cols = result_ids)
   )
 
   period_ids <- Rteta::vaep_features_lag(spadl$period_id, 2, "period_id_a")
@@ -108,12 +108,12 @@ vaep_get_features <- function(spadl) {
       ((Rteta::spadl_field_width / 2) - spadl$end_y)^2
   )
   start_goal_dist <- Rteta::vaep_features_lag(start_goal_distance, 2, "start_dist_to_goal_a")
-  end_goal_dist <- Rteta::vaep_features_lag(start_goal_distance, 2, "end_dist_to_goal_a")
+  end_goal_dist <- Rteta::vaep_features_lag(end_goal_distance, 2, "end_dist_to_goal_a")
 
   start_goal_angles <- abs(atan(((Rteta::spadl_field_width / 2) - spadl$start_y) / (Rteta::spadl_field_length - spadl$start_x)))
   end_goal_angles <- abs(atan(((Rteta::spadl_field_width / 2) - spadl$end_y) / (Rteta::spadl_field_length - spadl$end_x)))
   start_goal_angles <- Rteta::vaep_features_lag(start_goal_angles, 2, "start_angle_to_goal_a")
-  end_goal_angles <- Rteta::vaep_features_lag(start_goal_distance, 2, "end_angle_to_goal_a")
+  end_goal_angles <- Rteta::vaep_features_lag(end_goal_angles, 2, "end_angle_to_goal_a")
 
   dx <- (Rteta::vaep_features_lag(spadl$end_x, 2, "dx_a0") - spadl$start_x)[2:3]
   dy <- (Rteta::vaep_features_lag(spadl$end_y, 2, "dy_a0") - spadl$start_y)[2:3]
