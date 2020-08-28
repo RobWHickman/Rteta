@@ -26,6 +26,10 @@ vaep_features_lag <- function(vec, lags, name) {
 #' @export vaep_get_features
 
 vaep_get_features <- function(spadl) {
+  #switch back play directions
+  spadl[!spadl$home_team, grep("_x$", names(spadl))] <- Rteta::spadl_field_length - spadl[!spadl$home_team, grep("_x$", names(spadl))]
+  spadl[!spadl$home_team, grep("_y$", names(spadl))] <- Rteta::spadl_field_width - spadl[!spadl$home_team, grep("_y$", names(spadl))]
+
   type_ids <- Rteta::vaep_features_lag(spadl$type_id, 2, "type_id_a")
 
   types_onehot <- do.call(
@@ -95,23 +99,19 @@ vaep_get_features <- function(spadl) {
   movement <- sqrt(delta_x^2 + delta_y ^ 2)
   names(movement) <- gsub("^dx_", "movement_", names(movement))
 
-  lr <- spadl[c("start_x", "end_x", "start_y", "end_y")]
-  lr[!spadl$home_team, grep("_x$", names(lr))] <- Rteta::spadl_field_length - lr[!spadl$home_team, grep("_x$", names(lr))]
-  lr[!spadl$home_team, grep("_y$", names(lr))] <- Rteta::spadl_field_width - lr[!spadl$home_team, grep("_y$", names(lr))]
-
   start_goal_distance <- sqrt(
-    (Rteta::spadl_field_length - lr$start_x)^2 +
-      ((Rteta::spadl_field_width / 2) - lr$start_y)^2
+    (Rteta::spadl_field_length - spadl$start_x)^2 +
+      ((Rteta::spadl_field_width / 2) - spadl$start_y)^2
   )
   end_goal_distance <- sqrt(
-    (Rteta::spadl_field_length - lr$end_x)^2 +
-      ((Rteta::spadl_field_width / 2) - lr$end_y)^2
+    (Rteta::spadl_field_length - spadl$end_x)^2 +
+      ((Rteta::spadl_field_width / 2) - spadl$end_y)^2
   )
   start_goal_dist <- Rteta::vaep_features_lag(start_goal_distance, 2, "start_dist_to_goal_a")
   end_goal_dist <- Rteta::vaep_features_lag(start_goal_distance, 2, "end_dist_to_goal_a")
 
-  start_goal_angles <- abs(atan(((Rteta::spadl_field_width / 2) - lr$start_y) / (Rteta::spadl_field_length - lr$start_x)))
-  end_goal_angles <- abs(atan(((Rteta::spadl_field_width / 2) - lr$end_y) / (Rteta::spadl_field_length - lr$end_x)))
+  start_goal_angles <- abs(atan(((Rteta::spadl_field_width / 2) - spadl$start_y) / (Rteta::spadl_field_length - spadl$start_x)))
+  end_goal_angles <- abs(atan(((Rteta::spadl_field_width / 2) - spadl$end_y) / (Rteta::spadl_field_length - spadl$end_x)))
   start_goal_angles <- Rteta::vaep_features_lag(start_goal_angles, 2, "start_angle_to_goal_a")
   end_goal_angles <- Rteta::vaep_features_lag(start_goal_distance, 2, "end_angle_to_goal_a")
 

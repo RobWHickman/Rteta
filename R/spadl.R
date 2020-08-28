@@ -92,10 +92,10 @@ sb_convert_spadl <- function(match_events) {
   spadl_df$end_x[is.na(spadl_df$end_x)] <- spadl_df$start_x[is.na(spadl_df$end_x)]
   spadl_df$end_y[is.na(spadl_df$end_y)] <- spadl_df$start_y[is.na(spadl_df$end_y)]
   #fix direction of play
-  spadl_df$start_x[spadl_df$team_id != home_team] <- 105 - spadl_df$start_x[spadl_df$team_id != home_team]
-  spadl_df$end_x[spadl_df$team_id != home_team] <- 105 - spadl_df$end_x[spadl_df$team_id != home_team]
-  spadl_df$start_y[spadl_df$team_id != home_team] <- 68 - spadl_df$start_y[spadl_df$team_id != home_team]
-  spadl_df$end_y[spadl_df$team_id != home_team] <- 68 - spadl_df$end_y[spadl_df$team_id != home_team]
+  spadl_df$start_x[spadl_df$team_id != home_team] <- Rteta::spadl_field_length - spadl_df$start_x[spadl_df$team_id != home_team]
+  spadl_df$end_x[spadl_df$team_id != home_team] <- Rteta::spadl_field_length - spadl_df$end_x[spadl_df$team_id != home_team]
+  spadl_df$start_y[spadl_df$team_id != home_team] <- Rteta:spadl_field_width - spadl_df$start_y[spadl_df$team_id != home_team]
+  spadl_df$end_y[spadl_df$team_id != home_team] <- Rteta:spadl_field_width - spadl_df$end_y[spadl_df$team_id != home_team]
   #fill in clearance end locations
   spadl_df$end_x[spadl_df$type_name == "clearance"] <- spadl_df$start_x[which(spadl_df$type_name == "clearance") + 1]
   spadl_df$end_y[spadl_df$type_name == "clearance"] <- spadl_df$start_y[which(spadl_df$type_name == "clearance") + 1]
@@ -150,12 +150,12 @@ spadl_dict <- function(type, provider, data) {
       return(data)
     }
     if(type == "location_x") {
-      data <- ((data - 1) / 119) * 105
+      data <- ((data - 1) / 119) * Rteta::spadl_field_length
 
       return(data)
     }
     if(type == "location_y") {
-      data <- 68 - ((data - 1) / 79) * 68
+      data <- Rteta::spadl_field_width - ((data - 1) / 79) * Rteta::spadl_field_width
 
       return(data)
     }
