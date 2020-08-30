@@ -205,7 +205,7 @@ split_dribbles <- function(spadl) {
   same_phase <- floor(leading_actions$time_seconds) - floor(spadl$time_seconds) < max_dribble_duration
 
   #find where 'missing' dribbles need to be added
-  dribble_idx <- which(same_team& same_period & same_phase & notfar_leads & notclose_leads)
+  dribble_idx <- which(same_team & same_period & same_phase & notfar_leads & notclose_leads)
 
   #munge the missing dribbles features
   dribble_actions <- spadl[dribble_idx,]

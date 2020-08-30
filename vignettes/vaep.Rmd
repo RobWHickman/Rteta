@@ -1,0 +1,162 @@
+---
+title: "VAEP Vignette"
+author: "Robert Hickman"
+date: "30/08/2020"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  warning = FALSE,message = FALSE
+)
+```
+
+First things first, we want the libraries we'll need to get the event data, convert it into SPADL format and extract features and labels, and then to train a model on this data. There's probably some performance hit using tidyverse for this job but on 60 games worth we're fine. Eventually this (and the repo as a whole) will probably be rewritten using data.table methods
+
+```{r libraries}
+library(tidyverse) #munging
+library(Rteta) #convert to SPADL/vaep
+library(StatsBombR) #get data
+library(xgboost) #train xgboost model
+
+```
+
+Next we need to download our data. As with the public [socceraction notebooks](https://github.com/ML-KULeuven/socceraction/tree/master/public-notebooks), we'll be using StatsBomb's free 2018 World Cup event data. This can easily be downloaded using [StatsBomBR](https://github.com/statsbomb/StatsBombR) in a few lines of code. Downloading 64 matches worth of data will take a minute or two.
+
+```{r get_events}
+worldcup <- StatsBombR::FreeCompetitions() %>%
+  dplyr::filter(competition_name == "FIFA World Cup")
+worldcup_matches <- StatsBombR::FreeMatches(worldcup[,1:2])
+worldcup_events <- StatsBombR::StatsBombFreeEvents(worldcup_matches)
+```
+
+Nest we want to convert this nested JSON into a nice 2D SPADL format using Rteta::. This is code is very alpha version so I'd espect some bugs. If you could file them with reproducible examples and maybe even fixes at the [repo](https://github.com/RobWHickman/Rteta/issues) it would be much appreciated!
+
+```{r convert_spadl}
+spadl <- worldcup_events %>%
+  split(., f = .$match_id) %>%
+  map_df(., Rteta::sb_convert_spadl)
+
+head(spadl)
+```
+
+Next we're going to extract features from this SPADL dataset. I haven't coded up a function to define which to take (I'm not sure I even want to), but if we want to use the socceraction trained xgboost model, each features needs to be in the correct column, so here's an object of column names that will do that. If you want to train your own model you can select features as you see fit!
+
+```{r feature_columns}
+features <- c(
+  "type_id_a0", "type_pass_a0", "type_cross_a0", "type_throw_in_a0", "type_freekick_crossed_a0", "type_freekick_short_a0", "type_corner_crossed_a0", 
+  "type_corner_short_a0", "type_take_on_a0", "type_foul_a0", "type_tackle_a0", "type_interception_a0", "type_shot_a0", "type_shot_penalty_a0",
+  "type_shot_freekick_a0", "type_keeper_save_a0", "type_keeper_claim_a0", "type_keeper_punch_a0", "type_keeper_pick_up_a0", "type_clearance_a0", "type_bad_touch_a0",
+  "type_non_action_a0", "type_dribble_a0", "type_goalkick_a0", "bodypart_foot_a0", "bodypart_head_a0", "bodypart_other_a0", "result_id_a0",
+  "result_fail_a0", "result_success_a0", "result_offside_a0", "result_owngoal_a0", "result_yellow_card_a0", "result_red_card_a0", "goalscore_team",
+  "goalscore_opponent", "goalscore_diff", "start_x_a0", "start_y_a0", "end_x_a0", "end_y_a0", "dx_a0",
+  "dy_a0", "movement_a0", "start_dist_to_goal_a0", "start_angle_to_goal_a0", "end_dist_to_goal_a0", "end_angle_to_goal_a0"
+)
+
+
+```
+
+So now we can run our SPADL data into the function to get the labels (when a goal is about to be scored/conceded) and features (where the action happens/ what type of action, etc. etc.). I split here by game but you could easily split by game-period, or even possession chain. This R-thonic notation will create some (small!) differences in feature output to the socceraction features, but they are negligible and I honestly prefer them this way.
+
+If you want to train the model in R I left a few commented lines to split out some rows for training. In reality if you want to use this, I reckon you probably want to use some data you won't test on (e.g. if you're interested in League One players, using Premier League data, etc.) but each to their own. 
+
+For this vignette, I am using the model trained using socceraction in python which is attached to this package in data. I haven't quite got the xgboost APIs to match up between python and R as I'd like, but as with all changes, I think it's close enough for either to be usable and give actionable results. As the model is pre-trained, I don't need the training data.
+
+```{r vaep_features}
+#get the action features
+vaep_features <- spadl %>%
+  split(f = .$game_id) %>%
+  map_df(., Rteta::vaep_get_features) %>%
+  .[features]
+
+#get the training objective labels - near future goals
+vaep_labels <- spadl %>%
+  split(f = .$game_id) %>%
+  map_df(., Rteta::vaep_get_labels)
+
+#in case you want to train the model in R too
+#train_rows <- sample(seq(nrow(vaep_features)), round(nrow(vaep_features)/5))
+#train_vaep_features <- vaep_features[train_rows,]
+#train_vaep_labels <- vaep_labels[train_rows,]
+```
+
+(I still need to properly fix the package scoping of a model, but should be done in the next few days. You can find the data inside the source code for the package in the data folder/ on [github here](https://github.com/RobWHickman/Rteta/tree/master/data)). VAEP works by training two xgboost model on the chance of any action leading to a goal or a concession in the next n (10) actions and then taking the difference between the value added of an action for each of these. 
+
+```{r load_model}
+score_model <- xgboost::xgb.load("../data/vaep.scoremodel")
+concede_model <- xgboost::xgb.load("../data/vaep.concedemodel")
+
+#score_model <- xgboost::xgboost(data = as.matrix(vaep_features), label = as.matrix(vaep_labels["scores"]), max.depth = 5, nrounds = 500, objective = "binary:logistic", verbose = 0)
+#concede_model <- xgboost::xgboost(data = as.matrix(vaep_features), label = as.matrix(vaep_labels["concedes"]), max.depth = 5, nrounds = 500, objective = "binary:logistic", verbose = 0)
+
+```
+
+Once we have our model we can run it on some prepared data to predict the chance of any action leading to a goal in the near future, which we bind back to the original SPADL data frame
+
+```{r predict_values}
+#prep - not strictly necessary but good practice
+score_matrix <- xgboost::xgb.DMatrix(
+    data = as.matrix(vaep_features),
+    label = as.numeric(vaep_labels$scores)
+)
+
+concede_matrix <- xgboost::xgb.DMatrix(
+    data = as.matrix(vaep_features),
+    label = as.numeric(vaep_labels$concedes)
+)
+
+#bind predictions back to SPADL
+spadl$scores <- predict(score_model, newdata = score_matrix)
+spadl$concedes <- predict(concede_model, newdata = concede_matrix)
+
+```
+
+We then use the predictions of the model to calculate the value added of every action taken on the pitch (how much more likely an action makes a goal - how much more likely it makes conceeding).
+
+```{r score_actions}
+#score actions
+spadl <- spadl  %>%
+  Rteta::vaep_get_scores("scores", "concedes")
+```
+
+As a quick demo, we can then use this to rank every player in the 2018 World Cup by how much value they added to their team's performance. To compare, you can see the results of the socceraction repo trained on the same data [here](https://github.com/ML-KULeuven/socceraction/blob/master/public-notebooks/4-compute-vaep-values-and-top-players.ipynb).
+
+```{r rank_players}
+#group by player and sum total VAEP
+players <- spadl %>%
+  dplyr::group_by(player_id, player_name) %>%
+  dplyr::summarise(total_actions = n(),
+            total_offense = sum(attack_score, na.rm = TRUE),
+            total_defence = sum(defence_score, na.rm = TRUE),
+            total_score = sum(vaep_value, na.rm = TRUE)
+  ) %>%
+  arrange(-total_score)
+
+head(players)
+```
+We can also normalise this VAEP score by the total minutes played using Rteta::sb_get_mins_played and calculate the most impactful players, again seeing that it nicely lines up with what we get from running socceraction.
+
+```{r normalise_by_mins}
+#get the time played by each player per game
+mins <- worldcup_events %>%
+  split(., f = .$match_id) %>%
+  purrr::map_df(., Rteta::sb_getmins_played) %>%
+  dplyr::group_by(player.id) %>%
+  #convert to minutes
+  dplyr::summarise(total_mins = sum(state_seconds, na.rm = TRUE) / 60) %>%
+  #some players may appear in time played but have no spadl actions
+  dplyr::filter(player.id %in% players$player_id)
+
+players <- players %>%
+  dplyr::left_join(mins, by = c("player_id" = "player.id")) %>%
+  mutate(vaep_p90 = total_score / (total_mins / 90)) %>%
+  #filter out players with less than 2 full games
+  filter(total_mins > 180) %>%
+  select(player_name, total_vaep = total_score, vaep_p90) %>%
+  arrange(-vaep_p90)
+
+head(players)
+```
+
+That's all for now. There's still plenty of bugs and things to optimise I'm sure but at least this is working (mostly) and hopefully gives those not so familiar with python and chancce to play with VAEP :)
