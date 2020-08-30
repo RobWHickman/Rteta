@@ -9,15 +9,18 @@
 vaep_get_labels <- function(spadl, n_prev_actions = 10) {
   team_ids <- unique(spadl$team_id)
 
+  #find goal events
   goals <- which(grepl("^shot", spadl$type_name) & spadl$result_name == "success")
   owngoals <- which(spadl$result_name == "owngoal")
 
+  #get the id of the goalscoring teams for each goal
   goal_action_ids <- spadl$action_id[c(goals, owngoals)]
   goal_teams <- c(
     spadl$team_id[goals],
     sapply(spadl$team_id[owngoals], function(f) team_ids[!team_ids %in% f])
   )
 
+  #find actions by the goalscoring team in last n actions
   goal_actions <- mapply(
     Rteta::find_previous_actions,
     goal_action_ids,
@@ -26,6 +29,7 @@ vaep_get_labels <- function(spadl, n_prev_actions = 10) {
   )
   goal <- sort(unlist(goal_actions))
 
+  #do the same but for conceeding
   conceeding_actions <- mapply(
     Rteta::find_previous_actions,
     goal_action_ids,
@@ -34,6 +38,7 @@ vaep_get_labels <- function(spadl, n_prev_actions = 10) {
   )
   concede <- sort(unlist(conceeding_actions))
 
+  #create the labelling df
   label_df <- data.frame(
     scores = seq(nrow(spadl)) %in% goal,
     concedes = seq(nrow(spadl)) %in% concede,
@@ -52,6 +57,7 @@ vaep_get_labels <- function(spadl, n_prev_actions = 10) {
 #' @author Robert Hickman
 #' @export find_previous_actions
 
+#simple func to filter df based on team and n previous actions
 find_previous_actions <- function(action_id, team, n_prev_actions, spadl) {
   x <- which(spadl$team_id == team & spadl$action_id > action_id - n_prev_actions & spadl$action_id <= action_id)
 }

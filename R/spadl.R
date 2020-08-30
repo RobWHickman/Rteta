@@ -13,13 +13,14 @@ sb_convert_spadl <- function(match_events) {
   #some useful variables
   home_team <- match_events$team.id[1]
 
-  #init the actions df
+  #init the actions df with basic actions
   spadl_df <- data.frame(
     game_id = match_events$match_id,
     period_id = match_events$period,
     time_seconds = as.numeric(lubridate::hms(match_events$timestamp)),
     timestamp = match_events$timestamp,
     team_id = match_events$team.id,
+    #socceraction doesn't retain which team is 'home' but it's useful for converting play to left-to-right
     home_team = match_events$team.id == home_team,
     team_name = match_events$team.name,
     player_id = match_events$player.id,
@@ -111,7 +112,6 @@ sb_convert_spadl <- function(match_events) {
   spadl_df <- dplyr::left_join(spadl_df, Rteta::spadl_result_ids, by = "result_name")
   spadl_df <- dplyr::left_join(spadl_df, Rteta::spadl_bodypart_ids, by = "bodypart_name")
 
-
   return(spadl_df)
 }
 
@@ -126,6 +126,7 @@ sb_convert_spadl <- function(match_events) {
 #' @export spadl_dict
 
 #ugly code- rewrite as switch. but works
+#converts a vector of data into defined spadl types
 spadl_dict <- function(type, provider, data) {
   if(provider == "statsbomb") {
     if(type == "action") {
@@ -185,11 +186,14 @@ spadl_dict <- function(type, provider, data) {
 
 split_dribbles <- function(spadl) {
   leading_actions <- lead(spadl)
+
+  #filter definitions
   same_team <- spadl$team_id == leading_actions$team_id
   same_period <- spadl$period_id == leading_actions$period_id
   dx <- spadl$end_x - leading_actions$start_x
   dy <- spadl$end_y - leading_actions$start_y
 
+  #hardcoded vals from socceraction
   min_dribble_length = 3.0
   max_dribble_length = 60.0
   #bleh I don't like how this works
@@ -200,8 +204,10 @@ split_dribbles <- function(spadl) {
   notfar_leads <- dhyp <= max_dribble_length
   same_phase <- floor(leading_actions$time_seconds) - floor(spadl$time_seconds) < max_dribble_duration
 
+  #find where 'missing' dribbles need to be added
   dribble_idx <- which(same_team& same_period & same_phase & notfar_leads & notclose_leads)
 
+  #munge the missing dribbles features
   dribble_actions <- spadl[dribble_idx,]
   dribble_actions$player_id <- spadl$player_id[dribble_idx+1]
   dribble_actions$player_name <- spadl$player_name[dribble_idx+1]
