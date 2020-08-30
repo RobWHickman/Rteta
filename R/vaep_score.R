@@ -38,6 +38,14 @@ vaep_score_actions <- function(spadl, scores, concedes, score_type) {
   )
   prev_val[prev_goal] <- 0
 
+  if(score_type == "attack") {
+    pens <- spadl$type_name == "shot_penalty"
+    prev_val[pens] <- Rteta::pen_score_frac
+
+    corner <- spadl$type_name %in% c("corner_crossed", "corner_short")
+    prev_val[corner] <- Rteta::corner_score_frac
+  }
+
   value_add <- multiplyer * (pos_contrib - prev_val)
   return(value_add)
 }

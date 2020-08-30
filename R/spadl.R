@@ -94,8 +94,8 @@ sb_convert_spadl <- function(match_events) {
   #fix direction of play
   spadl_df$start_x[spadl_df$team_id != home_team] <- Rteta::spadl_field_length - spadl_df$start_x[spadl_df$team_id != home_team]
   spadl_df$end_x[spadl_df$team_id != home_team] <- Rteta::spadl_field_length - spadl_df$end_x[spadl_df$team_id != home_team]
-  spadl_df$start_y[spadl_df$team_id != home_team] <- Rteta:spadl_field_width - spadl_df$start_y[spadl_df$team_id != home_team]
-  spadl_df$end_y[spadl_df$team_id != home_team] <- Rteta:spadl_field_width - spadl_df$end_y[spadl_df$team_id != home_team]
+  spadl_df$start_y[spadl_df$team_id != home_team] <- Rteta::spadl_field_width - spadl_df$start_y[spadl_df$team_id != home_team]
+  spadl_df$end_y[spadl_df$team_id != home_team] <- Rteta::spadl_field_width - spadl_df$end_y[spadl_df$team_id != home_team]
   #fill in clearance end locations
   spadl_df$end_x[spadl_df$type_name == "clearance"] <- spadl_df$start_x[which(spadl_df$type_name == "clearance") + 1]
   spadl_df$end_y[spadl_df$type_name == "clearance"] <- spadl_df$start_y[which(spadl_df$type_name == "clearance") + 1]
