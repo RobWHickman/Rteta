@@ -1,0 +1,102 @@
+---
+title: "VAEP Vignette"
+author: "Robert Hickman"
+date: "30/08/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  warning = FALSE,message = FALSE
+)
+```
+
+```{r libraries}
+library(tidyverse)
+library(Rteta)
+library(StatsBombR)
+library(xgboost)
+
+```
+
+```{r get_events}
+worldcup <- StatsBombR::FreeCompetitions() %>%
+  dplyr::filter(competition_name == "FIFA World Cup")
+worldcup_matches <- StatsBombR::FreeMatches(worldcup[,1:2])
+worldcup_events <- StatsBombR::StatsBombFreeEvents(worldcup_matches)
+```
+```{r convert_spadl}
+spadl <- Rteta::sb_convert_spadl(worldcup_events)
+
+head(spadl)
+```
+```{r feature_columns}
+features <- c(
+  "type_id_a0", "type_pass_a0", "type_cross_a0", "type_throw_in_a0", "type_freekick_crossed_a0", "type_freekick_short_a0", "type_corner_crossed_a0", 
+  "type_corner_short_a0", "type_take_on_a0", "type_foul_a0", "type_tackle_a0", "type_interception_a0", "type_shot_a0", "type_shot_penalty_a0",
+  "type_shot_freekick_a0", "type_keeper_save_a0", "type_keeper_claim_a0", "type_keeper_punch_a0", "type_keeper_pick_up_a0", "type_clearance_a0", "type_bad_touch_a0",
+  "type_non_action_a0", "type_dribble_a0", "type_goalkick_a0", "bodypart_foot_a0", "bodypart_head_a0", "bodypart_other_a0", "result_id_a0",
+  "result_fail_a0", "result_success_a0", "result_offside_a0", "result_owngoal_a0", "result_yellow_card_a0", "result_red_card_a0", "goalscore_team",
+  "goalscore_opponent", "goalscore_diff", "start_x_a0", "start_y_a0", "end_x_a0", "end_y_a0", "dx_a0",
+  "dy_a0", "movement_a0", "start_dist_to_goal_a0", "start_angle_to_goal_a0", "end_dist_to_goal_a0", "end_angle_to_goal_a0"
+)
+
+```
+
+
+```{r vaep_features}
+vaep_features <- spadl %>%
+  split(f = .$game_id) %>%
+  map_df(., Rteta::vaep_get_features) %>%
+  .[features]
+
+vaep_labels <- spadl %>%
+  split(f = .$game_id) %>%
+  map_df(., Rteta::vaep_get_labels)
+
+train_rows <- sample(seq(nrow(vaep_features)), round(nrow(vaep_features)/5))
+train_vaep_features <- vaep_features[train_rows,]
+train_vaep_labels <- vaep_labels[train_rows,]
+```
+
+```{r load_model}
+#score_model <- xgboost::xgb.load("C:/Users/DHill/Downloads/vaep.scoremodel")
+#concede_model <- xgboost::xgb.load("C:/Users/DHill/Downloads/vaep.concedemodel")
+
+score_model <- xgboost::xgboost(data = as.matrix(train_vaep_features), label = as.matrix(train_vaep_labels["scores"]), max.depth = 5, nrounds = 500, objective = "binary:logistic", verbose = 0)
+concede_model <- xgboost::xgboost(data = as.matrix(train_vaep_features), label = as.matrix(train_vaep_labels["concedes"]), max.depth = 5, nrounds = 500, objective = "binary:logistic", verbose = 0)
+
+```
+
+```{r predict_values}
+score_matrix <- xgboost::xgb.DMatrix(
+    data = as.matrix(vaep_features),
+    label = as.numeric(vaep_labels$scores)
+)
+
+concede_matrix <- xgboost::xgb.DMatrix(
+    data = as.matrix(vaep_features),
+    label = as.numeric(vaep_labels$concedes)
+)
+
+spadl$scores <- predict(score_model, newdata = score_matrix)
+spadl$concedes <- predict(concede_model, newdata = concede_matrix)
+
+```
+
+```{r}
+spadl <- spadl  %>%
+  Rteta::vaep_get_scores("scores", "concedes")
+```
+
+```{r}
+players <- spadl %>%
+  dplyr::group_by(player_id, player_name) %>%
+  dplyr::summarise(total_actions = n(),
+            total_offense = sum(attack_score, na.rm = TRUE),
+            total_defence = sum(defence_score, na.rm = TRUE),
+            total_score = sum(vaep_value, na.rm = TRUE)
+  )
+
+```
+
