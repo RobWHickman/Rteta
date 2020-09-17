@@ -1,0 +1,122 @@
+---
+title: "expected threat"
+author: "robert hickman"
+date: "14/09/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  warning = FALSE,message = FALSE
+)
+```
+
+```{r libraries}
+library(tidyverse) #munging
+library(Rteta) #convert to SPADL/vaep
+library(StatsBombR) #get data
+library(xgboost) #train xgboost model
+library(ggsoccer)
+library(arrow)
+```
+
+
+```{r get_events}
+directory <- "C:/Users/robwh/Desktop/football/Fleetwood//Fleetwood_polished/data/event_data"
+x <- map_df(dir(directory)[1:2000], function(f) readRDS(file.path(directory, f)) %>% Rteta::sb_convert_spadl()) %>%
+  mutate_at(vars(start_x, end_x), 
+            funs(case_when(
+              home_team ~ .,
+              !home_team ~ Rteta::spadl_field_length - .
+            ))
+  )
+```
+
+```{r convert_spadl}
+spadl <- worldcup_events %>%
+  split(., f = .$match_id) %>%
+  map_df(., Rteta::sb_convert_spadl) %>%
+  mutate_at(vars(start_x, end_x), 
+            funs(case_when(
+              home_team ~ .,
+              !home_team ~ Rteta::spadl_field_length - .
+            )))
+
+head(spadl)
+```
+
+```{r create_pitch_boxes}
+create_boxes <- function(n_wide_boxes, n_long_boxes, pitch_w = 80, pitch_l = 120) {
+  box_width <- pitch_w / n_wide_boxes
+  box_length <- pitch_l/ n_long_boxes
+
+  boxes <- data.frame(x0 = rep(seq(0, pitch_l-box_length, box_length), each = n_wide_boxes),
+                      x1 = rep(seq(box_length, pitch_l, box_length), each = n_wide_boxes),
+                      y0 = rep(seq(0, pitch_w-box_width, box_width), n_long_boxes),
+                      y1 = rep(seq(box_width, pitch_w, box_width), n_long_boxes)) %>%
+    dplyr::mutate(id = 1:n(),
+                  center_x = (x0 + x1) / 2,
+                  center_y = (y0 + y1) / 2) %>%
+    dplyr::arrange(x0, y0)
+
+  return(boxes)
+}
+
+pitch_long <- 100
+pitch_wide <- 68
+
+n_long <- round(pitch_long / 6)
+n_wide <- round(pitch_wide / 6)
+
+boxes <- create_boxes(n_wide, n_long, pitch_w = pitch_wide, pitch_l = pitch_long)
+
+p1 <- ggplot() +
+  ggsoccer::annotate_pitch(dimensions = pitch_international) +
+  geom_rect(data = boxes, aes(xmin = x0, xmax = x1, ymin = y0, ymax = y1), fill = "red", alpha = 0.5, colour = "grey80") +
+  geom_text(data = boxes, aes(label = id, x = (x0 + x1)/2, y = (y0 + y1)/2)) +
+  theme_pitch()
+```
+
+```{r}
+get_grid_ref <- function(x, y, boxes) {
+  id <- boxes$id[max(which(y >= boxes$y0 & x >= boxes$x0))]
+}
+
+spadl <- x 
+spadl_boxed <- spadl %>%
+  mutate(
+    start_box = map2_dbl(start_x, start_y, get_grid_ref, boxes),
+    end_box = map2_dbl(end_x, end_y, get_grid_ref, boxes)
+  )
+
+```
+
+```{r}
+shots <- spadl_boxed %>%
+  dplyr::filter(type_name == "shot" & result_name != "owngoal") %>%
+  group_by(start_box, result_name) %>%
+  dplyr::summarise(n = n()) %>%
+  ungroup() %>%
+  right_join(dplyr::select(boxes, start_box = id)) %>%
+  tidyr::complete(start_box, result_name, fill = list(n = 0)) %>%
+  dplyr::filter(!is.na(result_name)) %>%
+  tidyr::pivot_wider(names_from = result_name, values_from = n) %>%
+  dplyr::mutate(score_chance = case_when(
+    fail + success == 0 ~ 0,
+    TRUE ~ success / (fail + success)
+  )) %>%
+  filter(fail + success > 5)
+
+boxes_plot <- left_join(boxes, dplyr::select(shots, id = start_box, score_chance))
+
+```
+
+```{r}
+p2 <- ggplot() +
+  ggsoccer::annotate_pitch(dimensions = pitch_international) +
+  geom_rect(data = boxes_plot, aes(xmin = x0, xmax = x1, ymin = y0, ymax = y1, fill = score_chance), alpha = 0.8, colour = "grey80") +
+  scale_fill_viridis_c(option = "plasma") +
+  theme_pitch()
+
+```
+
