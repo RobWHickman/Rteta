@@ -12,6 +12,7 @@ knitr::opts_chunk$set(
 ```
 
 ```{r}
+#libraries
 library(tidyverse)
 library(lubridate)
 library(StatsBombR)
@@ -19,6 +20,7 @@ library(StatsBombR)
 
 
 ```{r}
+#get data
 free_data <- data.frame(
   match_id = 15946,
   competition.competition_id = "who",
@@ -26,12 +28,16 @@ free_data <- data.frame(
 )
 data <- StatsBombR::get.matchFree(free_data)
 
+#get the length of each period
+#should probably write a function to do this automatically
 periods <- data %>%
   mutate(time = as.numeric(hms(timestamp))) %>%
   dplyr::group_by(period) %>%
   dplyr::summarise(period_length = max(time))
 
+#get the shots in the data
 shots <- data %>%
+  #get the timestamp of events
   dplyr::mutate(prev_time = map_dbl(period, function(p) {
     if(p == 1) {
       return(0)
@@ -42,38 +48,49 @@ shots <- data %>%
   ) %>%
   dplyr::mutate(time = as.numeric(hms(timestamp)) + prev_time,
                 shot_team = factor(team.name)) %>%
+  #filter shots
   dplyr::filter(type.name == "Shot") %>%
+  #select relevant columns
+  #not necessary per se
   dplyr::select(shot_team, shot_time = time, shot_xg = shot.statsbomb_xg)
 
-sim_match <- function(data, teams, times, xgs, max_phase_length = 5, n_times = 10000) {
+#func to sim match
+sim_match <- function(data, teams, times, xgs, max_phase_length = 5) {
+  #get the vars
   both_teams <- levels(eval_tidy(enquo(teams), data))
   shot_teams <- eval_tidy(enquo(teams), data)
   shot_times <- eval_tidy(enquo(times), data)
   xgs <- eval_tidy(enquo(xgs), data)
   
-  #filter out any non-xg coded events
+  #filter out any non-xg coded events that might have snuck in
   if(any(is.na(xgs))) {
     shot_teams <- shot_teams[-is.na(xgs)]
     shot_times <- shot_times[-is.na(xgs)]
     xgs <- xgs[-is.na(xgs)]
   }
 
+  #random numbers to sim
   random_numbers <- runif(xgs)
+  #goals scored where xg > rand n
   goals <- which(xgs > random_numbers)
   
+  #obviously a draw if no simmed goals
   if(length(goals) == 0) {
     return("draw")
   } else {
     
+    #if any events happen within n seconds count as same play
+    #cant score twice on same play
     too_soon <- which(shot_times[goals] - lag(shot_times[goals]) < max_phase_length)
     if(length(too_soon) > 0) {
       goals <- goals[-too_soon]
     }
     
+    #get the goals per team
     team_goals <- shot_teams[goals]
     tabled_goals<- table(team_goals)
-    z <<- tabled_goals
-    
+
+    #calc results
     if(tabled_goals[[1]] == tabled_goals[[2]]) {
       return("draw")
     } else if(tabled_goals[[1]] > tabled_goals[[2]]) {
@@ -84,14 +101,23 @@ sim_match <- function(data, teams, times, xgs, max_phase_length = 5, n_times = 1
   }
 }
 
+#rerun n times
 sims <- purrr::rerun(1000, sim_match(shots, shot_team, shot_time, shot_xg))
+#get the results of the sims
 sim_results <- table(unlist(sims))
 
 sim_results
 ```
 ```{r}
+#plot
 p <- ggplot(data.frame(sim_results), aes(y = Freq/sum(Freq), fill = Var1)) +
-  geom_bar()
+  geom_bar() +
+  scale_fill_discrete(name = "team") +
+  coord_flip() +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  theme(axis.text.y = element_blank(),
+        axis.title.y = element_blank())
 
 p
 ```
