@@ -153,7 +153,7 @@ mins <- worldcup_events %>%
 players <- players %>%
   dplyr::left_join(mins, by = c("player_id" = "player.id")) %>%
   mutate(vaep_p90 = total_score / (total_mins / 90)) %>%
-  #filter out players with less than 2 full games
+  #filter out players with less than 2 full games•
   filter(total_mins > 180) %>%
   select(player_name, total_vaep = total_score, vaep_p90) %>%
   arrange(-vaep_p90)

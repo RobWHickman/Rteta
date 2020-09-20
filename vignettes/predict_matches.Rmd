@@ -16,8 +16,8 @@ knitr::opts_chunk$set(
 library(tidyverse)
 library(lubridate)
 library(StatsBombR)
+library(rlang)
 ```
-
 
 ```{r}
 #get data
@@ -101,23 +101,80 @@ sim_match <- function(data, teams, times, xgs, max_phase_length = 5) {
   }
 }
 
+## Messy palette work ##
+
+#ideally have a table of all colours you would need
+team_cols <- data.frame(
+  team = c("Barcelona", "Deportivo Alavés", "Real Madrid", "Arsenal"),
+  colour = c("maroon", "dodgerblue", "grey80", "red")
+)
+
+teams <- levels(shots$shot_team)
+cols <- team_cols$colour[team_cols$team %in% teams]
+
+#define the colours on the plots
+col_pal <- scale_colour_manual(values = cols, breaks = teams)
+fill_pal <- scale_fill_manual(values = c(cols, "white"), breaks = c(teams, "draw"))
+##
+
+
 #rerun n times
-sims <- purrr::rerun(1000, sim_match(shots, shot_team, shot_time, shot_xg))
+times <- 1000
+sims <- purrr::rerun(times, sim_match(shots, shot_team, shot_time, shot_xg))
 #get the results of the sims
-sim_results <- table(unlist(sims))
+sim_results <- table(unlist(sims)) / times
 
 sim_results
 ```
 ```{r}
 #plot
-p <- ggplot(data.frame(sim_results), aes(y = Freq/sum(Freq), fill = Var1)) +
-  geom_bar() +
-  scale_fill_discrete(name = "team") +
+plot_data <- as.data.frame(sim_results) %>%
+  #reorder plotting levels
+  #might want to play around with this to get the home team first always
+  mutate(team = factor(Var1, levels = c(teams[1], "draw", teams[2])))
+
+p <- ggplot(plot_data, aes(y = Freq, fill = team, x = 1)) +
+  geom_bar(stat = "identity") +
+  fill_pal +
   coord_flip() +
+  labs(title = "simulated probabilities for match",
+       x = "chance") +
   theme_minimal() +
   theme(legend.position = "bottom") +
   theme(axis.text.y = element_blank(),
         axis.title.y = element_blank())
+
+p
+```
+
+```{r}
+#messy step graph stuff
+cumsum_xg <- shots %>%
+  group_by(shot_team) %>%
+  mutate(cumulative_xg = cumsum(shot_xg))
+
+total_time <- sum(periods$period_length) 
+
+end_xg <- cumsum_xg %>%
+  summarise(cumulative_xg = max(cumulative_xg)) %>%
+  mutate(shot_time = total_time)
+
+start_xg <- cumsum_xg %>%
+  summarise() %>%
+  mutate(cumulative_xg = 0, shot_time = 0)
+
+cumsum_xg <- bind_rows(cumsum_xg, end_xg, start_xg) %>%
+  mutate(shot_mins = shot_time / 60)
+  
+p <- ggplot(cumsum_xg, aes(x = shot_mins, y = cumulative_xg, colour = shot_team)) +
+  geom_step(size = 2) +
+  col_pal +
+  labs(
+    title = paste0("MATCH INFO HERE", "shots and simulated games"),
+    x = "minute",
+    y = "cumulative xg for"
+  ) +
+  theme_minimal()
 
 p
 ```
